@@ -4,6 +4,9 @@
 
 这是对VGG Network的总结笔记，总结按照论文排版顺序。
 
+[TOC]
+
+
 ---
 
 ## 去均值化（Mean Subtraction）or 零中心化（Zero-Centering）
@@ -159,6 +162,8 @@ MC方法的精确度略高于DE方法。根据两种方法的卷积边界条件�
 - 网络C比网络B更好，说明引入更多额外非线性是有利的。网络D比网络C好，说明增加感受野也很重要。`This indicates that while the additional non-linearity does help (C is better than B), it is also important to capture spatial context by using conv. filters with non-trivial receptive fields (D is better than C). `
 - 深层网络配小卷积核优于浅层网络配大卷积核。`which confirms that a deep net with small filters outperforms a shallow net with larger filters.`
 - LRN（局部响应归一化）并没有改善网络性能。`we note that using local response normalisation (A-LRN network) does not improve on the model A without any normalisation layers. We thus do not employ normalisation in the deeper architectures (B–E).`
+
+---
 
 ## 代码实现（Code Implementation）
 
