@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from typing import Dict,List
-
+import torch.nn.functional as F
 from .net import SSH,FPN,MobileNetV1
 
 class ClassHead(nn.Module):
@@ -44,10 +44,11 @@ class LandmarkHead(nn.Module):
         return output
     
 class RetinaFace(nn.Module):
-    def __init__(self,cfg: Dict) -> None:
+    def __init__(self,cfg: Dict,phase: str = 'train') -> None:
         super(RetinaFace,self).__init__()
 
         self.backbone = MobileNetV1()
+        self.phase = phase
 
         in_channels = cfg['in_channels']
         out_channels = cfg['out_channels']
@@ -65,6 +66,8 @@ class RetinaFace(nn.Module):
         self.ClassHead = make_ClassHead(fpn_nums=fpn_nums,in_channels=out_channels,anchor_nums=anchor_nums)
         self.BboxHead = make_BboxHead(fpn_nums=fpn_nums,in_channels=out_channels,anchor_nums=anchor_nums)
         self.LandmarkHead = make_LandmarkHead(fpn_nums=fpn_nums,in_channels=out_channels,anchor_nums=anchor_nums)
+        if phase == 'train':
+            self.init_weights()
 
     def forward(self,x: torch.Tensor) -> tuple[torch.Tensor]:
         output = self.backbone(x)
@@ -79,10 +82,20 @@ class RetinaFace(nn.Module):
         classification = torch.cat([self.ClassHead[i](feature) for i,feature in enumerate(features)],dim=1)
         bbox_regression = torch.cat([self.BboxHead[i](feature) for i,feature in enumerate(features)],dim=1)
         landmark_regression = torch.cat([self.LandmarkHead[i](feature) for i,feature in enumerate(features)],dim=1)
+        if self.phase == 'train':
+            return (classification,bbox_regression,landmark_regression)
+        else:
+            return (F.softmax(classification,dim=2),bbox_regression,landmark_regression)
 
-        return (classification,bbox_regression,landmark_regression)
-
-
+    def init_weights(self):
+        for module in self.modules():
+            if isinstance(module,nn.Conv2d):
+                nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
+                if module.bias is not None:
+                    nn.init.constant_(module.bias,0)
+            elif isinstance(module,nn.BatchNorm2d):
+                nn.init.constant_(module.weight,1)
+                nn.init.constant_(module.bias,0)
 
 
 def make_ClassHead(fpn_nums: int,in_channels: int,anchor_nums: int) -> nn.ModuleList:

@@ -94,3 +94,45 @@ def matrix_iof(box_a: np.ndarray,box_b: np.ndarray) -> np.ndarray:
     area_a = np.prod(box_a[:,2:] - box_a[:,:2],axis=1,keepdims=True)
 
     return area_i / np.maximum(area_a,1e-5)
+
+def decode(loc: torch.Tensor,priors: torch.Tensor,variances: List[float]) -> torch.Tensor:
+    boxes_center = priors[:, :2] + loc[:, :2] * variances[0] * priors[:, 2:]
+    boxes_wh = priors[:, 2:] * torch.exp(loc[:, 2:] * variances[1])
+    boxes = torch.cat((boxes_center, boxes_wh), dim=1)
+    boxes[:, :2] -= boxes[:, 2:] / 2  
+    boxes[:, 2:] += boxes[:, :2]      
+    return boxes
+
+def landms_decode(pred: torch.Tensor,priors: torch.Tensor,variances: List[float]) -> torch.Tensor:
+    landms = torch.cat((
+        priors[:, :2] + pred[:, :2] * variances[0] * priors[:, 2:],
+        priors[:, :2] + pred[:, 2:4] * variances[0] * priors[:, 2:],
+        priors[:, :2] + pred[:, 4:6] * variances[0] * priors[:, 2:],
+        priors[:, :2] + pred[:, 6:8] * variances[0] * priors[:, 2:],
+        priors[:, :2] + pred[:, 8:10] * variances[0] * priors[:, 2:]
+    ), dim=1)
+    return landms
+
+def nms(boxes: torch.Tensor,scores: torch.Tensor,iou_threshold: float = 0.4) -> List:
+    # boxes: [N,4]
+    # scores: [N]
+
+    _,order = scores.sort(0,descending=True)
+
+    keep = []
+
+    while order.numel() > 0:
+        i = order[0].item()
+        keep.append(i)
+
+        if order.numel() == 1:
+            break
+
+        iou = jaccard(box_a=boxes[i:i + 1,:],box_b=boxes[order[1:],:]).squeeze(0)
+
+        index = torch.where(iou <= iou_threshold)[0] # attention the function's return value
+
+        order = order[index + 1]
+
+    return keep
+

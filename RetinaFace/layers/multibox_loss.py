@@ -19,15 +19,15 @@ class MultiBoxLoss(nn.Module):
         self.neg_pos_ratio = neg_pos_ratio
         self.variances = variances
 
-    def forward(self,predictions: torch.Tensor,priors: torch.Tensor,targets: torch.Tensor) -> tuple[torch.Tensor,torch.Tensor,torch.Tensor]:
-        loc_data,conf_data,landm_data = predictions
+    def forward(self,predictions: torch.Tensor,priors: torch.Tensor,targets: List[torch.Tensor]) -> tuple[torch.Tensor,torch.Tensor,torch.Tensor]:
+        conf_data,loc_data,landm_data = predictions
 
         batch_size = loc_data.shape[0]
         num_priors = priors.shape[0]
 
         device = loc_data.device
         priors = priors.to(device=device) # priors is just a label , can not influence the outer variable
-        targets = [t.to(device) for t in targets] # the same as the front
+        targets = [t.to(device) for t in targets] # the same as the above
 
         loc_t = torch.zeros(batch_size,num_priors,4,dtype=torch.float32,device=device)
         conf_t = torch.zeros(batch_size,num_priors,dtype=torch.long,device=device)
@@ -63,8 +63,10 @@ class MultiBoxLoss(nn.Module):
         loss_landm = F.smooth_l1_loss(pos_landm_preds,pos_landm_gt,reduction='sum')
      
         batch_conf = conf_data.view(-1,self.num_classes)
-        loss_c = F.cross_entropy(batch_conf,conf_t.view(-1),reduction='none')
+        loss_c = F.cross_entropy(batch_conf,conf_t.view(-1),reduction='none',ignore_index=-1)
         loss_c[pos.view(-1)] = 0.0
+        ignored = (conf_t < 0).view(-1) 
+        loss_c[ignored] = 0.0
         loss_c = loss_c.view(batch_size,-1)
         _,loss_idx = loss_c.sort(dim=1,descending=True)
         _,idx_rank = loss_idx.sort(dim=1)
